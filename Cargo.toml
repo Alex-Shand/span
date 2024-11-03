@@ -7,4 +7,7 @@ edition = "2021"
 
 [dependencies]
 serde = { version = "1.0.166", features = ["derive"] }
-syntax-abuse = { version = "0.1.0", path = "../../syntax-abuse" }
+
+[dev-dependencies]
+#pretty_assertions = "1.4.0"
+#rstest = "0.21.0"
