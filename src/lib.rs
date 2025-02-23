@@ -15,11 +15,14 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::let_underscore_untyped)]
+#![allow(clippy::similar_names)]
+#![cfg_attr(coverage, feature(coverage_attribute))]
 
 use std::fmt;
 
-pub use chars::{Chars, TokenHandle};
 use serde::{Deserialize, Serialize};
+
+pub use self::chars::{Chars, Checkpoint, TokenHandle};
 
 mod chars;
 
@@ -27,127 +30,77 @@ mod chars;
 ///
 /// # Examples
 /// Empty span
-/// ```rust,ignore
+/// ```
 /// # use span::*;
-/// let span = Span {
-///     start: LineAndColumn {
-///         line: 1,
-///         column: 1
-///     },
-///     end: LineAndColumn {
-///         line: 1,
-///         column: 1
-///     },
-///     abs_start: 1,
-///     abs_end: 1,
-/// };
-/// assert_eq!(format!("{span}"), String::from("line 1 column 1"));
-/// assert_eq!(format!("{span:#}"), String::from("line 1 column 1"))
+/// let mut chars = Chars::new("123456");
+/// let start = chars.start_token();
+/// let span = chars.end_token(start);
+/// assert_eq!(format!("{span}"), "line 1 column 1");
+/// assert_eq!(format!("{span:#}"), "line 1 column 1");
 /// ```
 /// Single character span
-/// ```rust,ignore
+/// ```
 /// # use span::*;
-/// let span = Span {
-///     start: LineAndColumn {
-///         line: 1,
-///         column: 1
-///     },
-///     end: LineAndColumn {
-///         line: 1,
-///         column: 2
-///     },
-///     abs_start: 1,
-///     abs_end: 2
-/// };
-/// assert_eq!(format!("{span}"), String::from("line 1 column 1"));
-/// assert_eq!(format!("{span:#}"), String::from("line 1 column 1"))
+/// let mut chars = Chars::new("123456");
+/// let start = chars.start_token();
+/// let _ = chars.next();
+/// let span = chars.end_token(start);
+/// assert_eq!(format!("{span}"), "line 1 column 1");
+/// assert_eq!(format!("{span:#}"), "line 1 column 1");
 /// ```
 /// Single line span
-/// ```rust,ignore
+/// ```
 /// # use span::*;
-/// let span = Span {
-///     start: LineAndColumn {
-///         line: 1,
-///         column: 1
-///     },
-///     end: LineAndColumn {
-///         line: 1,
-///         column: 50
-///     },
-///     abs_start: 1,
-///     abs_end: 50,
-/// };
-/// assert_eq!(format!("{span}"), String::from("line 1 column 1"));
-/// assert_eq!(format!("{span:#}"), String::from("line 1 column 1 to column 50"))
+/// let mut chars = &mut Chars::new("123456");
+/// let start = chars.start_token();
+/// for _ in chars.take(4) {}
+/// let span = chars.end_token(start);
+/// assert_eq!(format!("{span}"), "line 1 column 1");
+/// assert_eq!(format!("{span:#}"), "line 1 column 1 to column 5");
 /// ```
 /// Multi line span
-/// ```rust,ignore
+/// ```
 /// # use span::*;
-/// let span = Span {
-///     start: LineAndColumn {
-///         line: 1,
-///         column: 1
-///     },
-///     end: LineAndColumn {
-///         line: 2,
-///         column: 50
-///     },
-///     abs_start: 1,
-///     abs_end: 100,
-/// };
-/// assert_eq!(format!("{span}"), String::from("line 1 column 1"));
-/// assert_eq!(format!("{span:#}"), String::from("line 1 column 1 to line 2 column 50"))
+/// let mut chars = &mut Chars::new("123\n456");
+/// let start = chars.start_token();
+/// for _ in chars.take(5) {}
+/// let span = chars.end_token(start);
+/// assert_eq!(format!("{span}"), "line 1 column 1");
+/// assert_eq!(format!("{span:#}"), "line 1 column 1 to line 2 column 2");
 /// ```
 /// Unknown span
-/// ```rust,ignore
+/// ```
 /// # use span::*;
-/// assert_eq!(format!("{}", Span::UNKNOWN), String::from("???"));
-/// assert_eq!(format!("{:#}", Span::UNKNOWN), String::from("???"))
+/// assert_eq!(format!("{}", Span::UNKNOWN), "???");
+/// assert_eq!(format!("{:#}", Span::UNKNOWN), "???");
 /// ```
 /// Unknown spans are considered equal to all other spans
-/// ```rust,ignore
+/// ```
 /// # use span::*;
-/// let span1 = Span {
-///     start: LineAndColumn {
-///         line: 1,
-///         column: 1
-///     },
-///     end: LineAndColumn {
-///         line: 2,
-///         column: 50
-///     },
-///     abs_start: 1,
-///     abs_end: 100,
+/// let mut chars = &mut Chars::new("123456");
+/// let span1 = {
+///     let start = chars.start_token();
+///     for _ in chars.take(3) {}
+///     chars.end_token(start)
 /// };
-/// let span2 = Span {
-///     start: LineAndColumn {
-///         line: 1,
-///         column: 1
-///     },
-///     end: LineAndColumn {
-///         line: 1,
-///         column: 1
-///     },
-///     abs_start: 1,
-///     abs_end: 1,
+/// let span2 = {
+///     let start = chars.start_token();
+///     for _ in chars.take(3) {}
+///     chars.end_token(start)
 /// };
 /// assert_eq!(span1, span1);
 /// assert_ne!(span1, span2);
 /// assert_eq!(span1, Span::UNKNOWN);
 /// assert_eq!(span2, Span::UNKNOWN);
 /// ```
-#[derive(Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone)]
+#[cfg_attr(not(coverage), derive(Serialize, Deserialize))]
 pub struct Span {
     absolute: Option<AbsoluteSpan>,
     relative: RelativeSpan,
 }
 
-impl fmt::Debug for Span {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Span: {self:#}")
-    }
-}
-
+#[cfg_attr(coverage, coverage(off))]
 impl fmt::Display for Span {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_unknown() {
@@ -199,69 +152,65 @@ impl Span {
     /// Aggregating an empty list of spans is an error. In debug it panics but
     /// in release it returns [Span::UNKNOWN]
     ///
-    /// # Examples
-    /// ```rust,ignore
+    /// ```
     /// # use span::*;
-    /// let span1 = Span {
-    ///     start: LineAndColumn {
-    ///         line: 1,
-    ///         column: 1,
-    ///     },
-    ///     end: LineAndColumn {
-    ///         line: 2,
-    ///         column: 2
-    ///     },
-    ///     abs_start: 1,
-    ///     abs_end: 2,
+    /// let mut chars = &mut Chars::new("123\n456\n789");
+    /// let span1 = {
+    ///     let start = chars.start_token();
+    ///     for _ in chars.take(3) {}
+    ///     chars.end_token(start)
     /// };
-    /// let span2 = Span {
-    ///     start: LineAndColumn {
-    ///         line: 3,
-    ///         column: 3
-    ///     },
-    ///     end: LineAndColumn {
-    ///         line: 4,
-    ///         column: 4
-    ///     },
-    ///     abs_start: 3,
-    ///     abs_end: 4
+    /// assert_eq!(format!("{span1:#}"), "line 1 column 1 to column 4");
+    /// assert_eq!(chars.next(), Some('\n'));
+    /// let span2 = {
+    ///     let start = chars.start_token();
+    ///     for _ in chars.take(3) {}
+    ///     chars.end_token(start)
     /// };
-    /// let span3 = Span {
-    ///     start: LineAndColumn {
-    ///         line: 5,
-    ///         column: 5
-    ///     },
-    ///     end: LineAndColumn {
-    ///         line: 6,
-    ///         column: 6
-    ///     },
-    ///     abs_start: 5,
-    ///     abs_end: 6,
+    /// assert_eq!(format!("{span2:#}"), "line 2 column 1 to column 4");
+    /// assert_eq!(chars.next(), Some('\n'));
+    /// let span3 = {
+    ///     let start = chars.start_token();
+    ///     for _ in chars.take(3) {}
+    ///     chars.end_token(start)
     /// };
-    /// let expected = Span {
-    ///     start: LineAndColumn {
-    ///         line: 1,
-    ///         column: 1
-    ///     },
-    ///     end: LineAndColumn {
-    ///         line: 6,
-    ///         column: 6
-    ///     },
-    ///     abs_start: 1,
-    ///     abs_end: 6,
-    /// };
-    /// let result = Span::aggregate(&[span1, span2, span3]);
-    /// assert_eq!(result, expected);
+    /// assert_eq!(format!("{span3:#}"), "line 3 column 1 to column 4");
+    /// assert_eq!(chars.next(), None);
+    ///
+    /// assert_eq!(
+    ///     format!("{:#}", Span::aggregate(&[span1, span2, span3])),
+    ///     "line 1 column 1 to line 3 column 4"
+    /// );
+    /// assert_eq!(
+    ///     format!("{:#}", Span::aggregate(&[span1, span3])),
+    ///     "line 1 column 1 to line 3 column 4"
+    /// );
+    /// assert_eq!(
+    ///     format!("{:#}", Span::aggregate(&[span2, span3])),
+    ///     "line 2 column 1 to line 3 column 4"
+    /// );
+    /// assert_eq!(
+    ///     format!("{:#}", Span::aggregate(&[span1, span2])),
+    ///     "line 1 column 1 to line 2 column 4"
+    /// );
     /// ```
     /// # Panics
     /// If aggregating an empty list of spans in debug
     pub fn aggregate(spans: &[Span]) -> Span {
-        let result = spans.iter().copied().reduce(Span::add);
-        if cfg!(debug_assertions) {
-            result.expect("Attempted to aggregate an empty list of spans")
-        } else {
-            result.unwrap_or(Span::UNKNOWN)
+        #[cfg_attr(coverage, coverage(off))]
+        fn check_unknown(span: &Span) {
+            debug_assert!(
+                !span.is_unknown(),
+                "Attempted to aggregate an empty list of spans"
+            );
         }
+        let result = spans
+            .iter()
+            .copied()
+            .reduce(Span::add)
+            .unwrap_or(Span::UNKNOWN);
+        check_unknown(&result);
+        result
     }
 
     fn add(a: Span, b: Span) -> Span {
@@ -284,37 +233,153 @@ impl Span {
         self.absolute.is_none()
     }
 
-    /// Start Line
+    /// Start Line (1 indexed)
+    ///
+    /// ```
+    /// # use span::*;
+    /// let mut chars = &mut Chars::new("123\n456");
+    /// let span1 = {
+    ///     let start = chars.start_token();
+    ///     for _ in chars.take(3) {}
+    ///     chars.end_token(start)
+    /// };
+    /// assert_eq!(chars.next(), Some('\n'));
+    /// let span2 = {
+    ///     let start = chars.start_token();
+    ///     for _ in chars.take(3) {}
+    ///     chars.end_token(start)
+    /// };
+    /// # assert_eq!(chars.next(), None);
+    /// assert_eq!(span1.start_line(), Some(1));
+    /// assert_eq!(span2.start_line(), Some(2));
+    /// assert_eq!(Span::UNKNOWN.start_line(), None);
+    /// ```
     #[must_use]
     pub fn start_line(&self) -> Option<usize> {
         self.absolute.map(|_| self.relative.start.line)
     }
 
-    /// Position on the start line of the beginning of the token
+    /// Position on the start line of the beginning of the token (1 indexed)
+    ///
+    /// ```
+    /// # use span::*;
+    /// let mut chars = &mut Chars::new("123456");
+    /// let span1 = {
+    ///     let start = chars.start_token();
+    ///     for _ in chars.take(3) {}
+    ///     chars.end_token(start)
+    /// };
+    /// let span2 = {
+    ///     let start = chars.start_token();
+    ///     for _ in chars.take(3) {}
+    ///     chars.end_token(start)
+    /// };
+    /// # assert_eq!(chars.next(), None);
+    /// assert_eq!(span1.start_position_on_start_line(), Some(1));
+    /// assert_eq!(span2.start_position_on_start_line(), Some(4));
+    /// assert_eq!(Span::UNKNOWN.start_position_on_start_line(), None);
+    /// ```
     #[must_use]
     pub fn start_position_on_start_line(&self) -> Option<usize> {
         self.absolute.map(|_| self.relative.start.column)
     }
 
-    /// End Line
+    /// End Line (1 indexed)
+    ///
+    /// ```
+    /// # use span::*;
+    /// let mut chars = &mut Chars::new("123\n456");
+    /// let span1 = {
+    ///     let start = chars.start_token();
+    ///     for _ in chars.take(3) {}
+    ///     chars.end_token(start)
+    /// };
+    /// assert_eq!(chars.next(), Some('\n'));
+    /// let span2 = {
+    ///     let start = chars.start_token();
+    ///     for _ in chars.take(3) {}
+    ///     chars.end_token(start)
+    /// };
+    /// # assert_eq!(chars.next(), None);
+    /// assert_eq!(span1.end_line(), Some(1));
+    /// assert_eq!(span2.end_line(), Some(2));
+    /// assert_eq!(Span::UNKNOWN.end_line(), None);
+    /// ```
     #[must_use]
     pub fn end_line(&self) -> Option<usize> {
         self.absolute.map(|_| self.relative.end.line)
     }
 
-    /// Position on the end line of the end of the token
+    /// Position on the end line of the end of the token (1 indexed)
+    ///
+    /// ```
+    /// # use span::*;
+    /// let mut chars = &mut Chars::new("123456");
+    /// let span1 = {
+    ///     let start = chars.start_token();
+    ///     for _ in chars.take(3) {}
+    ///     chars.end_token(start)
+    /// };
+    /// let span2 = {
+    ///     let start = chars.start_token();
+    ///     for _ in chars.take(3) {}
+    ///     chars.end_token(start)
+    /// };
+    /// # assert_eq!(chars.next(), None);
+    /// assert_eq!(span1.end_position_on_end_line(), Some(4));
+    /// assert_eq!(span2.end_position_on_end_line(), Some(7));
+    /// assert_eq!(Span::UNKNOWN.end_position_on_end_line(), None);
+    /// ```
     #[must_use]
     pub fn end_position_on_end_line(&self) -> Option<usize> {
         self.absolute.map(|_| self.relative.end.column)
     }
 
     /// Start of the token relative to the start of the text
+    ///
+    /// ```
+    /// # use span::*;
+    /// let mut chars = &mut Chars::new("123456");
+    /// let span1 = {
+    ///     let start = chars.start_token();
+    ///     for _ in chars.take(3) {}
+    ///     chars.end_token(start)
+    /// };
+    /// let span2 = {
+    ///     let start = chars.start_token();
+    ///     for _ in chars.take(3) {}
+    ///     chars.end_token(start)
+    /// };
+    /// # assert_eq!(chars.next(), None);
+    /// assert_eq!(span1.start(), Some(0));
+    /// assert_eq!(span2.start(), Some(3));
+    /// assert_eq!(Span::UNKNOWN.start(), None);
+    /// ```
     #[must_use]
     pub fn start(&self) -> Option<usize> {
         Some(self.absolute?.start)
     }
 
     /// Length of the token (may span multiple lines)
+    ///
+    /// ```
+    /// # use span::*;
+    /// let mut chars = &mut Chars::new("123456");
+    /// let span1 = {
+    ///     let start = chars.start_token();
+    ///     for _ in chars.take(3) {}
+    ///     chars.end_token(start)
+    /// };
+    /// let span2 = {
+    ///     let start = chars.start_token();
+    ///     for _ in chars.take(3) {}
+    ///     chars.end_token(start)
+    /// };
+    /// # assert_eq!(chars.next(), None);
+    /// assert_eq!(span1.len(), Some(3));
+    /// assert_eq!(span2.len(), Some(3));
+    /// assert_eq!(Span::UNKNOWN.len(), None);
+    /// ```
     #[must_use]
     #[expect(clippy::len_without_is_empty)]
     pub fn len(&self) -> Option<usize> {
@@ -322,6 +387,7 @@ impl Span {
     }
 }
 
+#[cfg_attr(coverage, coverage(off))]
 impl PartialEq for Span {
     fn eq(&self, other: &Span) -> bool {
         if self.is_unknown() || other.is_unknown() {
@@ -331,7 +397,8 @@ impl PartialEq for Span {
     }
 }
 
-#[derive(Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+#[cfg_attr(not(coverage), derive(Serialize, Deserialize))]
 struct AbsoluteSpan {
     start: usize,
     end: usize,
@@ -351,13 +418,8 @@ impl AbsoluteSpan {
     }
 }
 
-impl PartialEq for AbsoluteSpan {
-    fn eq(&self, other: &Self) -> bool {
-        self.start == other.start && self.end == other.end
-    }
-}
-
-#[derive(Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+#[cfg_attr(not(coverage), derive(Serialize, Deserialize))]
 struct RelativeSpan {
     start: LineAndColumn,
     end: LineAndColumn,
@@ -377,19 +439,11 @@ impl RelativeSpan {
     }
 }
 
-impl PartialEq for RelativeSpan {
-    fn eq(&self, other: &Self) -> bool {
-        self.start == other.start && self.end == other.end
-    }
-}
-
-/// Represents a specific character in a source file
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+#[cfg_attr(not(coverage), derive(Serialize, Deserialize))]
 struct LineAndColumn {
-    #[allow(missing_docs)]
-    pub line: usize,
-    #[allow(missing_docs)]
-    pub column: usize,
+    line: usize,
+    column: usize,
 }
 
 impl LineAndColumn {
@@ -409,56 +463,206 @@ impl LineAndColumn {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use pretty_assertions::assert_eq;
-//     use rstest::rstest;
+#[cfg(test)]
+#[cfg_attr(coverage, coverage(off))]
+mod test {
+    use rstest::rstest;
 
-//     use super::*;
+    use super::*;
 
-//     #[cfg(debug_assertions)]
-//     #[test]
-//     #[should_panic(expected = "Attempted to aggregate an empty list of spans")]
-//     fn aggregate_empty_list() {
-//         let _ = Span::aggregate(&[]);
-//     }
+    mod span {
+        use pretty_assertions::assert_eq;
 
-//     #[cfg(not(debug_assertions))]
-//     #[test]
-//     fn aggregate_empty_list() {
-//         assert_eq!(Span::aggregate(&[]), Span::UNKNOWN);
-//     }
+        use super::*;
 
-//     #[test]
-//     fn add() {
-//         assert_eq!(
-//             Span::add(
-//                 Span {
-//                     start: LineAndColumn { line: 0, column: 1 },
-//                     end: LineAndColumn { line: 2, column: 3 },
-//                     abs_start: 8,
-//                     abs_end: 9,
-//                 },
-//                 Span {
-//                     start: LineAndColumn { line: 4, column: 5 },
-//                     end: LineAndColumn { line: 6, column: 7 },
-//                     abs_start: 10,
-//                     abs_end: 11,
-//                 }
-//             ),
-//             Span {
-//                 start: LineAndColumn { line: 0, column: 1 },
-//                 end: LineAndColumn { line: 6, column: 7 },
-//                 abs_start: 8,
-//                 abs_end: 11,
-//             }
-//         );
-//     }
+        #[cfg(debug_assertions)]
+        #[test]
+        #[should_panic(
+            expected = "Attempted to aggregate an empty list of spans"
+        )]
+        fn aggregate_empty_list() {
+            let _ = Span::aggregate(&[]);
+        }
 
-//     #[rstest]
-//     #[case(Span::UNKNOWN, true)]
-//     #[case(Span { start: LineAndColumn { line: 0, column: 0 }, end: LineAndColumn { line: 0, column: 0 }, abs_start: 0, abs_end: 0 }, false)]
-//     fn is_unknown(#[case] span: Span, #[case] expected: bool) {
-//         assert_eq!(span.is_unknown(), expected);
-//     }
-// }
+        #[cfg(not(debug_assertions))]
+        #[test]
+        fn aggregate_empty_list() {
+            assert_eq!(Span::aggregate(&[]), Span::UNKNOWN);
+        }
+
+        #[rstest]
+        #[case(Span::UNKNOWN, Span::UNKNOWN, Span::UNKNOWN)]
+        #[case(
+            Span {
+                absolute: Some(AbsoluteSpan { start: 1, end: 2 }),
+                relative: RelativeSpan {
+                    start: LineAndColumn { line: 4, column: 5 },
+                    end: LineAndColumn { line: 6, column: 7 },
+                },
+            },
+            Span {
+                absolute: Some(AbsoluteSpan { start: 8, end: 9 }),
+                relative: RelativeSpan {
+                    start: LineAndColumn {
+                        line: 10,
+                        column: 11,
+                    },
+                    end: LineAndColumn {
+                        line: 12,
+                        column: 13,
+                    },
+                },
+            },
+            Span {
+                absolute: Some(AbsoluteSpan { start: 1, end: 9 }),
+                relative: RelativeSpan {
+                    start: LineAndColumn {
+                        line: 4,
+                        column: 5,
+                    },
+                    end: LineAndColumn {
+                        line: 12,
+                        column: 13,
+                    },
+                },
+            },
+        )]
+        #[case(
+            Span {
+                absolute: Some(AbsoluteSpan { start: 1, end: 2 }),
+                relative: RelativeSpan {
+                    start: LineAndColumn { line: 4, column: 5 },
+                    end: LineAndColumn { line: 6, column: 7 },
+                },
+            },
+            Span::UNKNOWN,
+            Span {
+                absolute: Some(AbsoluteSpan { start: 1, end: 2 }),
+                relative: RelativeSpan {
+                    start: LineAndColumn { line: 4, column: 5 },
+                    end: LineAndColumn { line: 6, column: 7 },
+                },
+            },
+        )]
+        #[case(
+            Span::UNKNOWN,
+            Span {
+                absolute: Some(AbsoluteSpan { start: 8, end: 9 }),
+                relative: RelativeSpan {
+                    start: LineAndColumn {
+                        line: 10,
+                        column: 11,
+                    },
+                    end: LineAndColumn {
+                        line: 12,
+                        column: 13,
+                    },
+                },
+            },
+            Span {
+                absolute: Some(AbsoluteSpan { start: 8, end: 9 }),
+                relative: RelativeSpan {
+                    start: LineAndColumn {
+                        line: 10,
+                        column: 11,
+                    },
+                    end: LineAndColumn {
+                        line: 12,
+                        column: 13,
+                    },
+                },
+            },
+        )]
+        fn add(
+            #[case] left: Span,
+            #[case] right: Span,
+            #[case] expected: Span,
+        ) {
+            let actual = Span::add(left, right);
+            assert_eq!(expected.is_unknown(), actual.is_unknown());
+            assert_eq!(expected, actual);
+        }
+
+        #[rstest]
+        #[case(Span::UNKNOWN, true)]
+        #[case(
+            Span {
+                absolute: Some(AbsoluteSpan { start: 1, end: 2 }),
+                relative: RelativeSpan {
+                    start: LineAndColumn { line: 4, column: 5 },
+                    end: LineAndColumn { line: 6, column: 7 },
+                },
+            },
+            false,
+        )]
+        fn is_unknown(#[case] span: Span, #[case] expected: bool) {
+            assert_eq!(span.is_unknown(), expected);
+        }
+    }
+
+    mod absolute {
+        use pretty_assertions::assert_eq;
+
+        use super::*;
+
+        #[rstest]
+        #[case(None, None, None)]
+        #[case(Some(AbsoluteSpan { start: 1, end: 2}), None, None)]
+        #[case(None, Some(AbsoluteSpan { start: 3, end: 4}), None)]
+        #[case(
+            Some(AbsoluteSpan { start: 1, end: 2}),
+            Some(AbsoluteSpan { start: 3, end: 4}),
+            Some(AbsoluteSpan { start: 1, end: 4}),
+        )]
+        fn add(
+            #[case] left: Option<AbsoluteSpan>,
+            #[case] right: Option<AbsoluteSpan>,
+            #[case] expected: Option<AbsoluteSpan>,
+        ) {
+            assert_eq!(expected, AbsoluteSpan::add(left, right));
+        }
+    }
+
+    mod relative {
+        use pretty_assertions::assert_eq;
+
+        use super::*;
+
+        #[test]
+        fn add() {
+            let left = RelativeSpan {
+                start: LineAndColumn { line: 1, column: 2 },
+                end: LineAndColumn { line: 3, column: 4 },
+            };
+            let right = RelativeSpan {
+                start: LineAndColumn { line: 5, column: 6 },
+                end: LineAndColumn { line: 7, column: 8 },
+            };
+            let expected = RelativeSpan {
+                start: LineAndColumn { line: 1, column: 2 },
+                end: LineAndColumn { line: 7, column: 8 },
+            };
+            assert_eq!(expected, RelativeSpan::add(left, right));
+        }
+    }
+
+    mod line_and_column {
+        use pretty_assertions::assert_eq;
+
+        use super::*;
+
+        #[test]
+        fn min() {
+            let left = LineAndColumn { line: 1, column: 2 };
+            let right = LineAndColumn { line: 3, column: 4 };
+            assert_eq!(left, LineAndColumn::min(left, right));
+        }
+
+        #[test]
+        fn max() {
+            let left = LineAndColumn { line: 1, column: 2 };
+            let right = LineAndColumn { line: 3, column: 4 };
+            assert_eq!(right, LineAndColumn::max(left, right));
+        }
+    }
+}
