@@ -1,4 +1,4 @@
-use itertools::{Itertools as _, PeekNth};
+use itertools::{Itertools as _, PeekNth, PeekingNext};
 use owned_chars::OwnedCharsExt;
 
 use crate::{AbsoluteSpan, LineAndColumn, RelativeSpan, Span};
@@ -92,7 +92,7 @@ impl Chars {
         &'a mut self,
         test: impl Fn(char) -> bool + 'a,
     ) -> impl Iterator<Item = char> + 'a {
-        self.it.peeking_take_while(move |c| test(*c))
+        self.peeking_take_while(move |c| test(*c))
     }
 
     /// Mark the beginning of a token
@@ -180,6 +180,23 @@ impl Iterator for Chars {
     }
 }
 
+#[cfg_attr(coverage, coverage(off))]
+impl PeekingNext for Chars {
+    fn peeking_next<F>(&mut self, accept: F) -> Option<Self::Item>
+    where
+        Self: Sized,
+        F: FnOnce(&Self::Item) -> bool,
+    {
+        let item = self.peek()?;
+        if accept(&item) {
+            let _ = self.next();
+            Some(item)
+        } else {
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 #[cfg_attr(coverage, coverage(off))]
 mod test {
@@ -194,6 +211,15 @@ mod test {
         assert_eq!(checkpoint.next(), Some('2'));
         assert_eq!(checkpoint.next(), Some('3'));
         checkpoint.commit();
+        let span = chars.end_token(start);
+        assert_eq!(format!("{span:#}"), "line 1 column 1 to column 4");
+    }
+
+    #[test]
+    fn peek_while_tracks_spans_correctly() {
+        let mut chars = Chars::new("111222");
+        let start = chars.start_token();
+        let _ = chars.peek_while(|c| c == '1').collect::<String>();
         let span = chars.end_token(start);
         assert_eq!(format!("{span:#}"), "line 1 column 1 to column 4");
     }
