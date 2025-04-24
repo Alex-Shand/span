@@ -162,6 +162,34 @@ impl Chars {
     pub fn checkpoint(&mut self) -> Checkpoint<'_> {
         Checkpoint::new(self)
     }
+
+    /// Remove any leading whitespace from the iterator (defined by
+    /// [char::is_whitespace]) then *peek* the first non-whitespace character.
+    ///
+    /// The returned character is left on the head of the iterator.
+    ///
+    /// ```
+    /// # use span::Chars;
+    /// let mut chars = Chars::new(" 1 2 3 4 5 6");
+    /// let mut peeks = Vec::new();
+    /// let mut nexts = Vec::new();
+    /// while let Some(c) = chars.skip_whitespace() {
+    ///     peeks.push(c);
+    ///     nexts.push(chars.next().unwrap());
+    /// }
+    /// assert_eq!(peeks, ['1', '2', '3', '4', '5', '6']);
+    /// assert_eq!(nexts, ['1', '2', '3', '4', '5', '6']);
+    /// ```
+    pub fn skip_whitespace(&mut self) -> Option<char> {
+        while let Some(c) = self.peek() {
+            if c.is_whitespace() {
+                let _ = self.next();
+                continue;
+            }
+            return Some(c);
+        }
+        None
+    }
 }
 
 impl Iterator for Chars {
