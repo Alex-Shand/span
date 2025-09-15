@@ -9,7 +9,7 @@ edition = "2024"
 [dependencies]
 itertools = "0.14.0"
 owned_chars = "0.3.2"
-serde = { version = "1.0.219", features = ["derive"] }
+serde = { version = "1.0.224", features = ["derive"] }
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
