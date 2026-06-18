@@ -7,7 +7,7 @@ edition = "2024"
  unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
 
 [dependencies]
-itertools = "0.14.0"
+itertools = "0.15.0"
 owned_chars = "0.3.2"
 serde = { version = "1.0.228", features = ["derive"] }
 
