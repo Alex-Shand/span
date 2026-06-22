@@ -21,6 +21,7 @@
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
+use value_type::value_type;
 
 pub use self::chars::{Chars, Checkpoint, TokenHandle};
 
@@ -74,26 +75,7 @@ mod chars;
 /// assert_eq!(format!("{}", Span::UNKNOWN), "???");
 /// assert_eq!(format!("{:#}", Span::UNKNOWN), "???");
 /// ```
-/// Unknown spans are considered equal to all other spans
-/// ```
-/// # use span::*;
-/// let mut chars = &mut Chars::new("123456");
-/// let span1 = {
-///     let start = chars.start_token();
-///     for _ in chars.take(3) {}
-///     chars.end_token(start)
-/// };
-/// let span2 = {
-///     let start = chars.start_token();
-///     for _ in chars.take(3) {}
-///     chars.end_token(start)
-/// };
-/// assert_eq!(span1, span1);
-/// assert_ne!(span1, span2);
-/// assert_eq!(span1, Span::UNKNOWN);
-/// assert_eq!(span2, Span::UNKNOWN);
-/// ```
-#[derive(Debug, Copy, Clone)]
+#[value_type(Copy)]
 #[cfg_attr(not(coverage), derive(Serialize, Deserialize))]
 pub struct Span {
     absolute: Option<AbsoluteSpan>,
@@ -387,17 +369,17 @@ impl Span {
     }
 }
 
-#[cfg_attr(coverage, coverage(off))]
-impl PartialEq for Span {
-    fn eq(&self, other: &Span) -> bool {
-        if self.is_unknown() || other.is_unknown() {
-            return true;
-        }
-        self.absolute == other.absolute && self.relative == other.relative
-    }
-}
+// #[cfg_attr(coverage, coverage(off))]
+// impl PartialEq for Span {
+//     fn eq(&self, other: &Span) -> bool {
+//         if self.is_unknown() || other.is_unknown() {
+//             return true;
+//         }
+//         self.absolute == other.absolute && self.relative == other.relative
+//     }
+// }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[value_type(Copy)]
 #[cfg_attr(not(coverage), derive(Serialize, Deserialize))]
 struct AbsoluteSpan {
     start: usize,
@@ -418,7 +400,7 @@ impl AbsoluteSpan {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[value_type(Copy)]
 #[cfg_attr(not(coverage), derive(Serialize, Deserialize))]
 struct RelativeSpan {
     start: LineAndColumn,
@@ -439,7 +421,7 @@ impl RelativeSpan {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[value_type(Copy)]
 #[cfg_attr(not(coverage), derive(Serialize, Deserialize))]
 struct LineAndColumn {
     line: usize,
