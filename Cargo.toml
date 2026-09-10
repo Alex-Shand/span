@@ -14,6 +14,6 @@ value-type = { git = "https://github.com/Alex-Shand/value-type.git", version = "
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
-rstest = "0.26.1"
+rstest = "0.27.0"
 #pretty_assertions = "1.4.0"
 #rstest = "0.21.0"
